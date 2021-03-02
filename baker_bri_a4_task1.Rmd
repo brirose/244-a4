@@ -1,0 +1,73 @@
+---
+title: "Agglomerative hierarchical clustering"
+author: "Bri Baker"
+date: "3/1/2021"
+output: 
+  html_document:
+    code_folding: TRUE
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(here)
+library(janitor)
+
+```
+## Summary
+
+complete linkage to create a dendrogram showing multivariate clustering for water chemistry by site
+
+```{r data input}
+
+stream_chem <- read_csv(here("data", "sbc_lter_registered_stream_chemistry.csv"), na = c(-999, "NA")) %>% 
+  clean_names() %>% 
+  select(-timestamp_local)
+
+```
+
+## Data by site
+
+```{r group sites}
+
+site_chem <- stream_chem %>% 
+  group_by(site_code) %>% 
+  summarise(across(everything(), ~mean(.x, na.rm=TRUE)))
+
+```
+
+
+```{r scale}
+
+site_scaled <- site_chem %>% 
+  select(nh4_u_m:spec_cond_u_spercm) %>% 
+  scale()
+
+rownames(site_scaled) <- site_chem$site_code
+
+```
+
+```{r euc}
+
+# Compute dissimilarity values (Euclidean distances)
+euc_distance <- dist(site_scaled, method = "euclidean") 
+
+```
+
+```{r}
+
+# Hierarchical clustering (complete linkage)
+hc_complete <- hclust(euc_distance, 
+                      method = "complete")
+                      
+
+plot(hc_complete, 
+     cex = 0.6, 
+     hang = -1)
+
+```
+
+## Citations
+
+Santa Barbara Coastal LTER and J. Melack. 2019. SBC LTER: Land: Stream chemistry in the Santa Barbara Coastal drainage area, ongoing since 2000 ver 16. Environmental Data Initiative. https://doi.org/10.6073/pasta/67a558a24ceed9a0a5bf5e46ab841174. 
