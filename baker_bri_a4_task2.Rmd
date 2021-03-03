@@ -1,0 +1,95 @@
+---
+title: "Parameter Estimation – Wild Fish Catch"
+author: "Bri Baker"
+date: "3/2/2021"
+output:
+  html_document:
+    theme: cosmo
+    code_folding: hide
+    highlight: kate
+---
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE,
+                      message = FALSE,
+                      warning = FALSE)
+library(tidyverse)
+library(here)
+library(janitor)
+library(nlstools)
+
+```
+## Summary
+
+
+```{r data import}
+fish <- read_csv(here("data/fish_catch.csv"),
+                 skip = 2,
+                 col_names = TRUE) %>% 
+  clean_names() %>% 
+  na.omit() %>% 
+  rowid_to_column("years") %>% 
+  mutate(years = years-1) %>% 
+  mutate_if(is.character, as.numeric,) %>% 
+  select(years, wild_catch)
+```
+
+
+## Data Exploration
+
+Exploratory plot of wild caught fish.
+
+```{r explore}
+ggplot(fish, aes(years, wild_catch))+
+  geom_point()+
+  labs(x = "years", y = "wild caught")+
+  scale_y_continuous(breaks = seq(0, 100, 10))+
+  theme_minimal()
+
+```
+
+Logistic growth curve which can be modeled as $P(t)=\frac{K}{1+Ae^{-kt}}$($K$ = carrying capacity, $A$ = $\frac{K-P_0}{P_0}$, $k$ = growth rate constant).
+
+## Initial parameter estimation
+
+```{r parameters}
+K <-  90 # carrying capacity at ~90
+A <- (K-10)/10 # Po ~10
+
+exp_fish <- fish %>% 
+  filter(years < 38) %>% # filter for exp
+  mutate(ln_pop = log(wild_catch)) # log transform
+
+lm_fish <- lm(ln_pop ~ years, data = exp_fish)
+
+r <- lm_fish$coefficients[[2]]
+
+```
+
+Estimated starting parameters: $K$ = `r K`, $A$ = `r A`, $k$ = `r r`.
+
+
+## Nonlinear least squares parameter estimation
+
+```{r}
+fish_nls <- nls(wild_catch ~ K/(1 + A*exp(-r*years)),
+                data = fish,
+                start = list(K = 90, A = 8, r = 0.035),
+                trace = TRUE)
+```
+
+
+
+
+
+
+## Citations
+
+Earth Policy Institute (2010). Global wild fish catch and aquaculture production, compiled by Earth Policy Institute with 1950-2010 from U.N. Food and Agriculture Organization (FAO), Global Capture Production and Global Aquaculture Production, electronic databases, at www.fao.org/fishery/topic/16140/en.
+
+Firke, Sam (2020). janitor: Simple Tools for Examining and Cleaning Dirty Data. R package version 2.0.1. https://CRAN.R-project.org/package=janitor
+
+Müller, Kirill (2020). here: A Simpler Way to Find Your Files. R package version 1.0.0. https://CRAN.R-project.org/package=here
+
+Wickham et al., (2019). Welcome to the tidyverse. Journal of Open Source Software, 4(43), 1686. https://doi.org/10.21105/joss.01686

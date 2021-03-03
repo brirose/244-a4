@@ -4,70 +4,89 @@ author: "Bri Baker"
 date: "3/1/2021"
 output: 
   html_document:
-    code_folding: TRUE
+    theme: cosmo
+    code_folding: hide
+    highlight: kate
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE,
+                      message = FALSE,
+                      warning = FALSE)
 
 library(tidyverse)
 library(here)
 library(janitor)
+library(ggdendro)
 
 ```
+
 ## Summary
 
-complete linkage to create a dendrogram showing multivariate clustering for water chemistry by site
+The Santa Barbara coastal LTER includes data starting in 2000 that monitors stream water chemistry for Santa Barbara area watersheds annually. Water chemistry components monitored include: dissolved nitrogen (nitrate, ammonium, total dissolved nitrogen); soluble reactive phosphorus (SRP); particulate organic carbon, nitrogen and phosphorus; total suspended sediments; and conductivity (Santa Barbara Coastal LTER and Melack, 2019). 
+
+Here, I utilize a complete linkage analysis to create a dendrogram. The dendrogram shows multivariate clustering of the water chemistry variables described above by site. The visualization allows the viewer to ascertain how closely related each site is to the others (Figure 1).
 
 ```{r data input}
 
-stream_chem <- read_csv(here("data", "sbc_lter_registered_stream_chemistry.csv"), na = c(-999, "NA")) %>% 
+stream_chem <- read_csv(here("data", "sbc_lter_registered_stream_chemistry.csv"), 
+                        na = c(-999, "NA")) %>% 
   clean_names() %>% 
   select(-timestamp_local)
 
 ```
 
-## Data by site
-
 ```{r group sites}
 
-site_chem <- stream_chem %>% 
-  group_by(site_code) %>% 
-  summarise(across(everything(), ~mean(.x, na.rm=TRUE)))
+site_chem <- stream_chem %>% # start from all years
+  group_by(site_code) %>% # group by site
+  summarise(across(everything(), 
+                   ~mean(.x, na.rm=TRUE))) %>% # means
+  na.omit() # remove NaN rows
 
 ```
 
 
 ```{r scale}
 
-site_scaled <- site_chem %>% 
-  select(nh4_u_m:spec_cond_u_spercm) %>% 
-  scale()
+site_scaled <- site_chem %>% # start from summary
+  select(nh4_u_m:spec_cond_u_spercm) %>% # select numeric variables
+  scale() # scale numeric variables
 
-rownames(site_scaled) <- site_chem$site_code
+rownames(site_scaled) <- site_chem$site_code # add rownames to site scaled
 
 ```
 
 ```{r euc}
 
-# Compute dissimilarity values (Euclidean distances)
-euc_distance <- dist(site_scaled, method = "euclidean") 
+dist_site <- dist(site_scaled, method = "euclidean") # compute dissimilarity values
 
 ```
 
-```{r}
+## Dendrogram
 
-# Hierarchical clustering (complete linkage)
-hc_complete <- hclust(euc_distance, 
+```{r dendro, fig.cap="Figure 1. Dendrogram of Santa Barbara streams based on water chemistry by complete linkage hierarchical clustering."}
+
+hc_site <- hclust(dist_site, # Hierarchical clustering; complete linkage
                       method = "complete")
                       
 
-plot(hc_complete, 
-     cex = 0.6, 
-     hang = -1)
+ggdendrogram(hc_site, rotate = TRUE)+
+  labs(title = "Relationships between Santa Barbara streams based on water chemistry",
+       caption = "Bri Baker, 2021\n(Santa Barbara Coastal LTER and Melack, 2019)")
 
 ```
 
+
+
 ## Citations
 
+de Vries, Andrie and Ripley, Brian D. (2020). ggdendro: Create Dendrograms and Tree Diagrams Using 'ggplot2'. R package version 0.1.22. https://CRAN.R-project.org/package=ggdendro
+
+Firke, Sam (2020). janitor: Simple Tools for Examining and Cleaning Dirty Data. R package version 2.0.1. https://CRAN.R-project.org/package=janitor
+
+Müller, Kirill (2020). here: A Simpler Way to Find Your Files. R package version 1.0.0. https://CRAN.R-project.org/package=here
+
 Santa Barbara Coastal LTER and J. Melack. 2019. SBC LTER: Land: Stream chemistry in the Santa Barbara Coastal drainage area, ongoing since 2000 ver 16. Environmental Data Initiative. https://doi.org/10.6073/pasta/67a558a24ceed9a0a5bf5e46ab841174. 
+
+Wickham et al., (2019). Welcome to the tidyverse. Journal of Open Source Software, 4(43), 1686. https://doi.org/10.21105/joss.01686
