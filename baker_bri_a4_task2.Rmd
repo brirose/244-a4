@@ -18,9 +18,13 @@ library(tidyverse)
 library(here)
 library(janitor)
 library(nlstools)
+library(broom)
 
 ```
+
 ## Summary
+
+Wild fish catch has increased on a global scale. These data enumerate global wild fish catch in millions of tons per year from 1950 to 2012 (Earth Policy Institute, 2012). From the observed values, I created a model for the data utilizing nonlinear least squares. 
 
 
 ```{r data import}
@@ -43,17 +47,18 @@ Exploratory plot of wild caught fish.
 ```{r explore}
 ggplot(fish, aes(years, wild_catch))+
   geom_point()+
-  labs(x = "years", y = "wild caught")+
+  labs(x = "years", 
+       y = "wild caught fish (million tons)")+
   scale_y_continuous(breaks = seq(0, 100, 10))+
   theme_minimal()
 
 ```
 
-Logistic growth curve which can be modeled as $P(t)=\frac{K}{1+Ae^{-kt}}$($K$ = carrying capacity, $A$ = $\frac{K-P_0}{P_0}$, $k$ = growth rate constant).
+This exploratory plot indicates that the data roughly follow a logistic growth curve. This curve can be modeled as $P(t)=\frac{K}{1+Ae^{-kt}}$($K$ = carrying capacity, $A$ = $\frac{K-P_0}{P_0}$, $k$ = growth rate constant).
 
 ## Initial parameter estimation
 
-```{r parameters}
+```{r initial param}
 K <-  90 # carrying capacity at ~90
 A <- (K-10)/10 # Po ~10
 
@@ -61,9 +66,9 @@ exp_fish <- fish %>%
   filter(years < 38) %>% # filter for exp
   mutate(ln_pop = log(wild_catch)) # log transform
 
-lm_fish <- lm(ln_pop ~ years, data = exp_fish)
+lm_fish <- lm(ln_pop ~ years, data = exp_fish) # make linear model
 
-r <- lm_fish$coefficients[[2]]
+r <- lm_fish$coefficients[[2]] # pull coefficient
 
 ```
 
@@ -72,24 +77,53 @@ Estimated starting parameters: $K$ = `r K`, $A$ = `r A`, $k$ = `r r`.
 
 ## Nonlinear least squares parameter estimation
 
-```{r}
-fish_nls <- nls(wild_catch ~ K/(1 + A*exp(-r*years)),
+```{r calc param}
+fish_nls <- nls(wild_catch ~ K/(1 + A*exp(-r*years)), # run nls
                 data = fish,
-                start = list(K = 90, A = 8, r = 0.035),
-                trace = TRUE)
+                start = list(K = K, A = A, r = r),
+                trace = FALSE)
+
+fish_model <- broom::tidy(fish_nls) #tidy to tibble
+
 ```
 
+The calculated parameter variables are as follows: $K$ = `r round(fish_model$estimate[1], 2)` million tons, $A$ = `r round(fish_model$estimate[2], 2)` million tons, $r$ = `r round(fish_model$estimate[3], 2)` million tons/year. 
 
 
+## Model visualization
+
+```{r predict}
+
+fish_predict <- predict(fish_nls) # make predictions for every year
+
+fish_complete <- data.frame(fish, fish_predict) #bind to original df
+
+# Plot them all together:
+ggplot(data = fish_complete, aes(x = years, y = wild_catch)) +
+  geom_point() +
+  geom_line(aes(x = years, y = fish_predict)) +
+  labs(title = "Global increase in wild fish catch from 1950 - 2012",
+       subtitle = "Observed values and modeled growth curve",
+       x = "Year",
+       y = "Fish (million tons)",
+       caption = "Bri Baker, 2021\n(Earth Policy Institute, 2012)") +
+  scale_x_continuous(labels = seq(1950, 2010, 20)) +
+  theme_minimal()
+
+```
 
 
 
 ## Citations
 
-Earth Policy Institute (2010). Global wild fish catch and aquaculture production, compiled by Earth Policy Institute with 1950-2010 from U.N. Food and Agriculture Organization (FAO), Global Capture Production and Global Aquaculture Production, electronic databases, at www.fao.org/fishery/topic/16140/en.
+Baty, Florent, Christian Ritz, Sandrine Charles, Martin Brutsche, Jean-Pierre Flandrois, Marie-Laure Delignette-Muller (2015). A Toolbox for Nonlinear Regression in R: The Package nlstools. Journal of Statistical Software, 66(5), 1-21. URL http://www.jstatsoft.org/v66/i05/.
+
+Earth Policy Institute (2012). Global wild fish catch and aquaculture production, compiled by Earth Policy Institute with 1950-2010 from U.N. Food and Agriculture Organization (FAO), Global Capture Production and Global Aquaculture Production, electronic databases, at www.fao.org/fishery/topic/16140/en.
 
 Firke, Sam (2020). janitor: Simple Tools for Examining and Cleaning Dirty Data. R package version 2.0.1. https://CRAN.R-project.org/package=janitor
 
 Müller, Kirill (2020). here: A Simpler Way to Find Your Files. R package version 1.0.0. https://CRAN.R-project.org/package=here
+
+Robinson, David, Alex Hayes and Simon Couch (2020). broom: Convert Statistical Objects into Tidy Tibbles. R package version 0.7.2. https://CRAN.R-project.org/package=broom
 
 Wickham et al., (2019). Welcome to the tidyverse. Journal of Open Source Software, 4(43), 1686. https://doi.org/10.21105/joss.01686

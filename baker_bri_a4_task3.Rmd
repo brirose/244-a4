@@ -1,0 +1,81 @@
+---
+title: 'Bootstrapped Confidence Interval for Proportions'
+author: "Bri Baker"
+date: "3/3/2021"
+output:
+  html_document:
+    theme: cosmo
+    code_folding: hide
+    highlight: kate
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      message = FALSE,
+                      warning = FALSE)
+
+library(tidyverse)
+library(here)
+library(boot)
+```
+
+# Summary
+
+In a 2014 survey of UCSB community members, 22 out of 36 surveyed UCSB community members (61%) identifying as nonbinary or genderqueer responded that they had personally experienced “exclusionary, offensive, hostile or intimidating conduct” (Rankin & Associates Consulting, 2014). 
+
+Here, I utilize bootstrapping to determine a 95% confidence interval for this statistic, based off of the observed data (n = 36).
+
+
+```{r data}
+
+hurt <- rep(c(1 , 0), times = c(22, 14)) # 1 for yes, 0 for no
+
+
+```
+
+```{r bootstrap}
+
+ratio_hurt <- function(x,i){
+  sum(x[i])/36 # calculate ratio hurt
+}
+
+hurtboot_10k <- boot(
+  hurt, # use original data
+  statistic = ratio_hurt, # find ratio hurt
+  R = 10000 # bootstrap 10k times
+)
+
+hurt_ci <- boot.ci(hurtboot_10k, conf = 0.95)
+
+ci_vec <- hurt_ci$normal
+
+```
+
+```{r histogram}
+
+boot_ratio <- as_tibble(hurtboot_10k$t)
+
+ggplot(boot_ratio, aes(V1)) +
+  geom_histogram(bins = 20) +
+  labs(title = "Proportion of nonbinary and genderqueer people hurt by conduct at UCSB",
+       subtitle = "Bootstrapping analysis of 2014 survey data",
+       x = "Proportion",
+       y = "Count",
+       caption = "Bri Baker, 2021\n(Rankin & Associates Consulting, 2014)") +
+  theme_minimal()
+
+```
+
+The confidence interval when these data are bootstrapped 10,000 times is `r round(ci_vec[2], 2)`-`r round(ci_vec[3], 3)` indicating that there is a 95% chance that 95 of 100 calculated confidence intervals will contain the actual population parameter in that range. 
+
+
+
+## Citations
+
+Canty, Angelo and Brian Ripley (2020). boot: Bootstrap R (S-Plus) Functions. R package version 1.3-25.
+
+Müller, Kirill (2020). here: A Simpler Way to Find Your Files. R package version 1.0.0. https://CRAN.R-project.org/package=here
+
+Rankin & Associates Consulting (2014). UCSB Campus Climate Project Final Report. http://campusclimate.ucop.edu/_common/files/pdf-climate/ucsb-full-report.pdf
+
+Wickham et al., (2019). Welcome to the tidyverse. Journal of Open Source Software, 4(43), 1686. https://doi.org/10.21105/joss.01686
